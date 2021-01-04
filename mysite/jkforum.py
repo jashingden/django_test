@@ -4,17 +4,19 @@ Created on Tue Nov 10 17:48:11 2020
 
 @author: eddyteng
 """
+from myapp.models import JKFPost
 import mechanicalsoup
 import datetime
 import os
+import traceback
 
 name_list = ["中山區.林森北路","板橋.中永和","大台北","萬華.西門町","三重.新莊"]
 url_list = ["type-1128-1476.html","type-1128-1950.html","type-1128-1949.html","type-1128-1948.html","type-1128-1951.html"]
 
 home = "https://www.jkforum.net/"
-mydir = os.getcwd()+'/mysite/templates'
+mydir = os.getcwd()+'/templates'
 
-def parse_url(url, max_count=10):
+def parse_url(zone, url, max_count=10):
     body = ""
     start_url = home + url
     
@@ -24,6 +26,7 @@ def parse_url(url, max_count=10):
     a_list = [a for a in page.soup.find_all("a") if a.get("href") is not None]
     count = 0
     match = 0
+    find = 0
     for a in a_list:
         link = a["href"]
         if "forum.php?mod=viewthread" in link:
@@ -31,18 +34,42 @@ def parse_url(url, max_count=10):
                 click = a["onclick"]
                 if "atarget(this)" in click:
                     count += 1
+                    tid = get_tid(link)
+                    name = a.text if len(a.text) <= 50 else a.text[0:50]
                     content_url = home + link
-                    body, og_url = parse_content(content_url, body, a.text)
+                    plist = JKFPost.objects.filter(tid=tid)
+                    og_url = ""
+                    if len(plist) > 0:
+                        p = plist[0]
+                        if p.is_found == True:
+                            body, og_url = parse_content(content_url, body, name)
+                            find += 1
+                    else:
+                        p = JKFPost(tid=tid, zone=zone, name=name)
+                        body, og_url = parse_content(content_url, body, name)
+                        find += 1
+                        if len(og_url) > 0:
+                            p.is_found = True
+                            p.url = og_url
+                        p.save()
+                        
                     if len(og_url) > 0:
                         match += 1
-                        body = body + "<br><h1><a href='"+og_url+"' target='_blank'>"+a.text+"</a></h1><br>\r\n"
+                        body = body + "<br><h1><a href='"+og_url+"' target='_blank'>"+name+"</a></h1><br>\r\n"
                         body = body + "<hr>"
                         #print(a.text)
                         #print(content_url)
                         #print("-----------------")
         if count >= max_count:
             break
-    return body, match
+    return body, find, match
+
+def get_tid(link):
+    idx = link.index("tid=")
+    start = idx+4
+    end = link.index("&", idx)
+    tid = link[start:end]
+    return tid
 
 def parse_content(url, body, name=""):
     browser = mechanicalsoup.StatefulBrowser()
@@ -63,6 +90,8 @@ def parse_content(url, body, name=""):
                         og_url = meta["content"]
                         for img in img_list:
                             img_file = img["file"]
+                            if img_file.startswith('/'):
+                                img_file = home + img_file[1:]
                             #img_width = img["width"]
                             body = body + "<img src='"+img_file+"'>\r\n"
                             #print(img_file, img_width)
@@ -101,18 +130,50 @@ def saveHTML(path, html):
     file.close()
 
 def request(zone, max_count):
-    if zone < 0 or zone >= len(name_list):
-        return "", ""
+    try:
+        if zone < 0 or zone >= len(name_list):
+            return "", ""
+        
+        name = name_list[zone]
+        url = url_list[zone]
+        body, find_count, match_count = parse_url(zone, url, max_count)
+        
+        dt = datetime.datetime.now()
+        title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
+        head = "<head><meta http-equiv='Content-Type' content='text/html; charset=utf-8' /><title>"+title+"</title></head>"
+        output = "<html>"+head+"<body>"+body+"</body></html>"
+    except:
+        title = "Server Error"
+        head = "<head><meta http-equiv='Content-Type' content='text/html; charset=utf-8' /><title>"+title+"</title></head>"
+        exc = traceback.format_exc().splitlines()
+        body = ""
+        for e in exc:
+            body += e + "<br>"
+        output = "<html>"+head+"<body>"+body+"</body></html>"
+    return title, output
+
+def select(zone, max_count, is_found=True, show=False):
+    slist = JKFPost.objects.filter(zone=zone, is_found=is_found).order_by('-created_at')
     
-    name = name_list[zone]
-    url = url_list[zone]
-    body, match_count = parse_url(url, max_count)
     dt = datetime.datetime.now()
-    title = name+" 找到"+str(match_count)+"筆,搜尋"+str(max_count)+"筆 "+dt.strftime("%c")
+    title = "找到"+str(len(slist))+"筆,總共"+str(JKFPost.objects.count())+"筆 "+dt.strftime("%c")
     head = "<head><meta http-equiv='Content-Type' content='text/html; charset=utf-8' /><title>"+title+"</title></head>"
-    
+    body = ""
+    count = 0
+    for s in slist:
+        if len(s.url) > 0:
+            if (show):
+                body, og_url = parse_content(s.url, body, s.name)
+                body = body + "<br><h1><a href='"+s.url+"' target='_blank'>"+s.name+"</a></h1><br>\r\n"
+                body = body + "<hr>"
+            else:
+                body += "<a href='"+s.url+"' target='_blank'>"+s.name+"</a><<br>\r\n"
+        else:
+            s.delete()
+        count += 1
+        if count >= max_count:
+            break;
     output = "<html>"+head+"<body>"+body+"</body></html>"
-    #print(output)
     return title, output
 
 def run():

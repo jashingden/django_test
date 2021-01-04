@@ -14,3 +14,11 @@ def jkforum(request):
     max_count = int(request.GET.get('count', 10))
     title, output = jkf.request(zone, max_count)
     return HttpResponse(output)
+
+def jkforum_select(request):
+    zone = int(request.GET.get('zone', 0))
+    max_count = int(request.GET.get('count', 10))
+    is_found = bool(request.GET.get('is_found', True))
+    show = bool(request.GET.get('show', False))
+    title, output = jkf.select(zone, max_count, is_found, show)
+    return HttpResponse(output)
