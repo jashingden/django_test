@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<!-- jQuery library -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<!-- Bootstrap library -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+<script>
+//name_list = ["中山區.林森北路","板橋.中永和","大台北","萬華.西門町","三重.新莊"]
+function delByTid(tid) {
+  var name = $("div#"+tid).find("a").text()
+  var yes = confirm('你確定要刪除: '+name);
+  if (yes) {
+    url = location.href.substring(0, location.href.lastIndexOf("/")) + "/del?tid=" + tid;
+    $.get(url, function(data, status) {
+      console.log("Data: " + data + " Status: " + status);
+      $("#"+tid).hide();
+    });
+  }
+}
+$(document).ready(function(){
+  $("a").click(function(){
+    var tid = $(this).attr("id");
+    $("div#"+tid).addClass("bg-light");
+  });
+  $("#search").on("keyup", function(){
+    var keyword = $(this).val();
+    $("a").filter(function(){
+      var tid = $(this).attr("id");
+      $("div#"+tid).toggle($(this).text().indexOf(keyword) > -1);
+    });
+  });
+});
+</script>
+</head>
+<body>
+<div class="container-fluid">
+<input class="form-control" id="search" type="text" placeholder="Search..">
+{{ body }}
+</div>
+</body>
+</html>

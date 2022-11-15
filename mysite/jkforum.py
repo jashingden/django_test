@@ -16,7 +16,7 @@ url_list = ["type-1128-1476.html","type-1128-1950.html","type-1128-1949.html","t
 home = "https://www.jkforum.net/"
 mydir = os.getcwd()+'/templates'
 
-def parse_url(zone, url, max_count=10):
+def parse_url(zone, url, max_count=10, show=False):
     body = ""
     start_url = home + url
     
@@ -42,8 +42,11 @@ def parse_url(zone, url, max_count=10):
                     if len(plist) > 0:
                         p = plist[0]
                         if p.is_found == True:
-                            body, og_url = parse_content(content_url, body, name)
-                            find += 1
+                            if (show):
+                                body, og_url = parse_content(content_url, body, name)
+                                find += 1
+                            else:
+                                og_url = p.url
                     else:
                         p = JKFPost(tid=tid, zone=zone, name=name)
                         body, og_url = parse_content(content_url, body, name)
@@ -80,7 +83,7 @@ def parse_content(url, body, name=""):
         cls = table["class"]
         if "view-data" in cls:
             og_url = ""
-            if find_spa(table, name) == False and find_line(table, name):
+            if find_spa(table, name) == False:# and find_line(table, name):
                 #print(table)
                 #print("-----------------")
                 meta = page.soup.find("meta", property='og:url')
@@ -100,8 +103,7 @@ def parse_content(url, body, name=""):
 def find_line(table, name=""):
     font_list = table.find_all("font")
     for font in font_list:
-        line_text = ("Line","LINE","賴")
-        spa_text = ("館")
+        line_text = ("Line","LINE","賴","本人")
         for t in line_text:
             if len(name) > 0 and t in name:
                 return True
@@ -114,7 +116,7 @@ def find_line(table, name=""):
 def find_spa(table, name=""):
     font_list = table.find_all("font")
     for font in font_list:
-        spa_text = ("舒壓","紓壓","定點","幹部","18-25y","單親媽","24H")
+        spa_text = ("定點","會館","幹部","紅牌","24H")
         for t in spa_text:
             if len(name) > 0 and t in name:
                 return True
@@ -129,52 +131,64 @@ def saveHTML(path, html):
     file.write(html)
     file.close()
 
-def request(zone, max_count):
+def request(zone, max_count, show=False):
     try:
         if zone < 0 or zone >= len(name_list):
             return "", ""
         
         name = name_list[zone]
         url = url_list[zone]
-        body, find_count, match_count = parse_url(zone, url, max_count)
+        body, find_count, match_count = parse_url(zone, url, max_count, show)
         
         dt = datetime.datetime.now()
         title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
-        head = "<head><meta http-equiv='Content-Type' content='text/html; charset=utf-8' /><title>"+title+"</title></head>"
-        output = "<html>"+head+"<body>"+body+"</body></html>"
+        if show == False:
+            body = title
+            title = 'jkforum'
     except:
         title = "Server Error"
-        head = "<head><meta http-equiv='Content-Type' content='text/html; charset=utf-8' /><title>"+title+"</title></head>"
         exc = traceback.format_exc().splitlines()
         body = ""
         for e in exc:
             body += e + "<br>"
-        output = "<html>"+head+"<body>"+body+"</body></html>"
-    return title, output
+    return title, body
 
 def select(zone, max_count, is_found=True, show=False):
     slist = JKFPost.objects.filter(zone=zone, is_found=is_found).order_by('-created_at')
     
+    name = name_list[zone]
     dt = datetime.datetime.now()
-    title = "找到"+str(len(slist))+"筆,總共"+str(JKFPost.objects.count())+"筆 "+dt.strftime("%c")
-    head = "<head><meta http-equiv='Content-Type' content='text/html; charset=utf-8' /><title>"+title+"</title></head>"
+    title = name+" 找到"+str(len(slist))+"筆,總共"+str(JKFPost.objects.count())+"筆 "+dt.strftime("%c")
     body = ""
     count = 0
     for s in slist:
         if len(s.url) > 0:
             if (show):
                 body, og_url = parse_content(s.url, body, s.name)
-                body = body + "<br><h1><a href='"+s.url+"' target='_blank'>"+s.name+"</a></h1><br>\r\n"
+                body = body + "<br><h1><button onclick=\"delByTid('"+s.tid+"', '"+s.name+"');\">刪除</button> <a href='"+s.url+"' target='_blank'>"+s.name+"</a></h1><br>\r\n"
                 body = body + "<hr>"
             else:
-                body += "<a href='"+s.url+"' target='_blank'>"+s.name+"</a><<br>\r\n"
+                body += "<div id='"+s.tid+"' class='row'><div class='col'><button onclick=\"delByTid('"+s.tid+"');\">刪除</button> <a id='"+s.tid+"' href='"+s.url+"' target='_blank'>"+s.name+"</a></div></div>\r\n"
         else:
             s.delete()
         count += 1
         if count >= max_count:
             break;
-    output = "<html>"+head+"<body>"+body+"</body></html>"
-    return title, output
+    return title, body
+
+def delete(tid):
+    plist = JKFPost.objects.filter(tid=tid)
+    if len(plist) > 0:
+        p = plist[0]
+        p.is_found = False
+        p.save()
+        title = "已刪除" + tid
+    else:
+        title = "找不到" + tid
+    return title
+
+def deleteAll():
+    JKFPost.objects.all().delete()
 
 def run():
     zone = 0
