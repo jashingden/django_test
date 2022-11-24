@@ -9,14 +9,14 @@ Created on Thu Dec 17 16:17:19 2020
 # Import all default settings.
 from .settings import *
 
-import dj_database_url
-DATABASES = {
-    'default': dj_database_url.config(
-        # Feel free to alter this value to suit your needs.
-        default='postgresql://postgres:postgres@localhost:5432/mysite',
-        conn_max_age=600
-    )
-}
+#import dj_database_url
+#DATABASES = {
+#    'default': dj_database_url.config(
+#        # Feel free to alter this value to suit your needs.
+#        default='postgresql://postgres:postgres@localhost:5432/mysite',
+#        conn_max_age=600
+#    )
+#}
 
 # Honor the 'X-Forwarded-Proto' header for request.is_secure().
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
