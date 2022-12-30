@@ -22,16 +22,45 @@ function delByTid(tid) {
     });
   }
 }
+function keepByTid(tid) {
+  var name = $("div#"+tid).find("a").text()
+  var keep = prompt(name + '\n你確定要 保留請輸入1，90幫請輸入2:', '0');
+  if (keep == '1' || keep == '2') {
+    url = location.href.substring(0, location.href.lastIndexOf("/")) + "/keep?tid=" + tid + "&status=" + keep;
+    $.get(url, function(data, status) {
+      console.log("Data: " + data + " Status: " + status);
+      $("#"+tid).hide();
+    });
+  }
+}
+function showByTag(tag) {
+  $("button.show_tag").filter(function(){
+    var tid = $(this).attr("id");
+    $("div#"+tid).toggle($(this).text().indexOf(tag) > -1);
+  });
+}
+function showByStatus(status) {
+  $("button.show_tag").filter(function(){
+    var tid = $(this).attr("id");
+    var s = $(this).attr("status");
+    console.log("s: "+s+" status: "+status);
+    $("div#"+tid).toggle(s == status);
+  });
+}
 $(document).ready(function(){
   $("a").click(function(){
     var tid = $(this).attr("id");
     $("div#"+tid).addClass("bg-light");
   });
+  $('#reload').click(function(){
+    location.reload();
+  });
   $("#search").on("keyup", function(){
     var keyword = $(this).val();
     $("a").filter(function(){
       var tid = $(this).attr("id");
-      $("div#"+tid).toggle($(this).text().indexOf(keyword) > -1);
+      var tagged = $(this).attr("tagged");
+      $("div#"+tid).toggle($(this).text().indexOf(keyword) > -1 && tagged != "1");
     });
   });
 });
@@ -40,6 +69,7 @@ $(document).ready(function(){
 <body>
 <div class="container-fluid">
 <input class="form-control" id="search" type="text" placeholder="Search..">
+<button id="reload">重新整理</button>
 {{ body }}
 </div>
 </body>

@@ -26,5 +26,7 @@ urlpatterns = [
     path('jkforum/select', jkforum_select),
     path('jkforum/del', jkforum_delete),
     path('jkforum/delete', jkforum_deleteAll),
+    path('jkforum/tag', jkforum_tag),
+    path('jkforum/keep', jkforum_keep),
     path('sugar/', sugar)
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

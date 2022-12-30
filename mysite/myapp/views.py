@@ -1,11 +1,11 @@
 from django.shortcuts import render
 from django.http import HttpResponse
 from django.utils.safestring import mark_safe
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 def hello_world(request):
     return render(request, 'test.html', {
-            'current_time': str(datetime.now()),
+            'current_time': str(datetime.now(timezone(timedelta(hours=+8)))),
             })
 
 import jkforum as jkf
@@ -38,16 +38,35 @@ def jkforum_delete(request):
     else:
         del_msg = ''
     return render(request, 'test.html', {
-            'current_time': str(datetime.now()) + ' MSG=' + del_msg,
+            'current_time': str(datetime.now(timezone(timedelta(hours=+8)))) + ' MSG=' + del_msg,
             })
     
 def jkforum_deleteAll(request):
     jkf.deleteAll()
     return render(request, 'test.html', {
-            'current_time': str(datetime.now()),
+            'current_time': str(datetime.now(timezone(timedelta(hours=+8)))),
+            })
+    
+def jkforum_tag(request):
+    zone = int(request.GET.get('zone', 0))
+    tag = request.GET.get('tag', '')
+    msg = jkf.tag(zone, tag)
+    return render(request, 'test.html', {
+            'current_time': str(datetime.now(timezone(timedelta(hours=+8)))) + ' MSG=' + msg,
+            })
+    
+def jkforum_keep(request):
+    tid = request.GET.get('tid', '')
+    status = int(request.GET.get('status', 0))
+    if len(tid) > 0:
+        msg = jkf.keep(tid, status)
+    else:
+        msg = ''
+    return render(request, 'test.html', {
+            'current_time': str(datetime.now(timezone(timedelta(hours=+8)))) + ' MSG=' + msg,
             })
     
 def sugar(request):
     return render(request, 'test.html', {
-            'current_time': str(datetime.now()),
+            'current_time': str(datetime.now(timezone(timedelta(hours=+8)))),
             })
