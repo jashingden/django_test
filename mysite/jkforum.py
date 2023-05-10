@@ -16,6 +16,7 @@ url_list = ["type-1128-1476.html","type-1128-1950.html","type-1128-1949.html","t
 
 home = "https://www.jkforum.net/"
 mydir = os.getcwd()+'/staticfiles/jkforum/'
+mylocal = False
 
 def parse_url(zone, url, max_count=10, show=False):
     body = ""
@@ -86,9 +87,14 @@ def parse_content(zone, tid, url, body, name="", show=False):
         browser = mechanicalsoup.StatefulBrowser()
         page = browser.get(url)
         table_list = page.soup.find_all("table", class_="view-data")
-        table = table_list[0]
-        text = table.text
-        saveHTML(txt_path, table.text)
+        if len(table_list) > 0:
+            table = table_list[0]
+            text = table.text
+            if (mylocal):
+                a_list = table.find_all("a")
+                for a in a_list:
+                    text += '\n' + a["href"]
+                saveHTML(txt_path, text)
         
     og_url = ""
     tag = ""
@@ -118,9 +124,14 @@ def find_content(tid, url, tag):
         browser = mechanicalsoup.StatefulBrowser()
         page = browser.get(url)
         table_list = page.soup.find_all("table", class_="view-data")
-        table = table_list[0]
-        text = table.text
-        saveHTML(txt_path, table.text)
+        if len(table_list) > 0:
+            table = table_list[0]
+            text = table.text
+            if (mylocal):
+                a_list = table.find_all("a")
+                for a in a_list:
+                    text += '\n' + a["href"]
+                saveHTML(txt_path, text)
     
     print(txt_path)
     print(text)
