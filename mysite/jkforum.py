@@ -51,13 +51,14 @@ def parse_url(zone, url, max_count=10, show=False):
                                 og_url = p.url
                     else:
                         p = JKFPost(tid=tid, zone=zone, name=name)
-                        body, og_url, tag = parse_content(zone, tid, content_url, body, name, show)
+                        body, og_url, tag, price, status = parse_content(zone, tid, content_url, body, name, show)
                         find += 1
                         if len(og_url) > 0:
                             p.is_found = True
                             p.url = og_url
                             p.tag = tag
-                        p.status = 0
+                            p.price = price
+                        p.status = status
                         p.save()
                         
                     if len(og_url) > 0:
@@ -93,16 +94,22 @@ def parse_content(zone, tid, url, body, name="", show=False):
             if (mylocal):
                 a_list = table.find_all("a")
                 for a in a_list:
-                    text += '\n' + a["href"]
+                    link = a["href"]
+                    if link.startswith("http"):
+                        text += '\n' + link
                 saveHTML(txt_path, text)
         
     og_url = ""
     tag = ""
+    price = 0
+    status = 0
     if find_spa(text, name) == False:
         meta = page.soup.find("meta", property='og:url')
         if meta is not None:
             og_url = meta["content"]
             tag = get_tag(text, zone)
+            price = get_price(text, name)
+            status = get_status(text, name)
             if (show):
                 img_list = [img for img in table.find_all("img") if img.get("file") is not None]
                 if len(img_list) < 10:
@@ -113,7 +120,7 @@ def parse_content(zone, tid, url, body, name="", show=False):
                             #img_width = img["width"]
                             body = body + "<img src='"+img_file+"'>\r\n"
                             #print(img_file, img_width)
-    return body, og_url, tag
+    return body, og_url, tag, price, status
 
 def find_content(tid, url, tag):
     txt_path = mydir+tid+'.txt'
@@ -139,7 +146,7 @@ def find_content(tid, url, tag):
 
 def find_spa(table_text, name=""):
     #font_list = table.find_all("font")
-    spa_text = ("定點","會館","幹部","紅牌","24H")
+    spa_text = ("定點","幹部","紅牌","24H")
     for t in spa_text:
         if len(name) > 0 and t in name:
             return True
@@ -153,6 +160,80 @@ def get_tag(table_text, zone):
         if t.tag in table_text:
             return t.tag
     return ""
+
+def get_price(text, name=""):
+    if len(name) > 0:
+        if "2000" in name or "2k" in name or "2K" in name:
+            return 2000
+        if "2100" in name or "2.1k" in name or "2.1K" in name:
+            return 2100
+        if "2200" in name or "2.2k" in name or "2.2K" in name:
+            return 2200
+        if "2300" in name or "2.3k" in name or "2.3K" in name:
+            return 2300
+        if "2400" in name or "2.4k" in name or "2.4K" in name:
+            return 2400
+        if "2500" in name or "2.5k" in name or "2.5K" in name:
+            return 2500
+        if "2600" in name or "2.6k" in name or "2.6K" in name:
+            return 2600
+        if "2700" in name or "2.7k" in name or "2.7K" in name:
+            return 2700
+        if "2800" in name or "2.8k" in name or "2.8K" in name:
+            return 2800
+        if "2900" in name or "2.9k" in name or "2.9K" in name:
+            return 2900
+        if "1900" in name or "1.9k" in name or "1.9K" in name:
+            return 1900
+        if "1800" in name or "1.8k" in name or "1.8K" in name:
+            return 1800
+        if "1700" in name or "1.7k" in name or "1.7K" in name:
+            return 1700
+        if "1600" in name or "1.6k" in name or "1.6K" in name:
+            return 1600
+        if "1500" in name or "1.5k" in name or "1.5K" in name:
+            return 1500
+    #table text
+    if "2000" in text or "2k" in text or "2K" in text:
+        return 2000
+    if "2100" in text or "2.1k" in text or "2.1K" in text:
+        return 2100
+    if "2200" in text or "2.2k" in text or "2.2K" in text:
+        return 2200
+    if "2300" in text or "2.3k" in text or "2.3K" in text:
+        return 2300
+    if "2400" in text or "2.4k" in text or "2.4K" in text:
+        return 2400
+    if "2500" in text or "2.5k" in text or "2.5K" in text:
+        return 2500
+    if "2600" in text or "2.6k" in text or "2.6K" in text:
+        return 2600
+    if "2700" in text or "2.7k" in text or "2.7K" in text:
+        return 2700
+    if "2800" in text or "2.8k" in text or "2.8K" in text:
+        return 2800
+    if "2900" in text or "2.9k" in text or "2.9K" in text:
+        return 2900
+    if "1900" in text or "1.9k" in text or "1.9K" in text:
+        return 1900
+    if "1800" in text or "1.8k" in text or "1.8K" in text:
+        return 1800
+    if "1700" in text or "1.7k" in text or "1.7K" in text:
+        return 1700
+    if "1600" in text or "1.6k" in text or "1.6K" in text:
+        return 1600
+    if "1500" in text or "1.5k" in text or "1.5K" in text:
+        return 1500
+    return 0
+
+def get_status(text, name=""):
+    if len(name) > 0:
+        if "90分" in name or "/90" in name:
+            return 2
+    #table text
+    if "90分" in name or "/90" in name:
+        return 2
+    return 0
 
 def saveHTML(path, html):
     file = open(path, 'w', encoding='UTF-8')
@@ -175,20 +256,24 @@ def deleteFiles(path):
             #print('deleting file: '+file)
             os.remove(file)
 
-def request(zone, max_count, show=False):
+def request(zone, max_count, times, show=False):
     try:
         if zone < 0 or zone >= len(name_list):
             return "", ""
         
         name = name_list[zone]
         url = url_list[zone]
-        body, find_count, match_count = parse_url(zone, url, max_count, show)
+        title = ''
+        body = ''
         
-        dt = datetime.now(timezone(timedelta(hours=+8)))
-        title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
-        if show == False:
-            body = title
-            title = 'jkforum'
+        for i in range(0, times):
+            p_body, find_count, match_count = parse_url(zone, url, max_count, show)
+            dt = datetime.now(timezone(timedelta(hours=+8)))
+            title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
+            if show == False:
+                p_body = title
+                title = 'jkforum'
+            body += p_body+"<br>"
     except:
         title = "Server Error"
         exc = traceback.format_exc().splitlines()
@@ -211,7 +296,7 @@ def select(zone, max_count, is_found=True, show=False):
         tag_list.append(t.tag)
         body += "<button onclick=\"showByTag('"+t.tag+"');\">"+t.tag+"</button> "
     
-    body = body + "<br>未分類：<br>\r\n"
+    body = body + "<br><label id='show_list'>未分類/未定價</label>：<br>\r\n"
     count = 0
     for s in slist:
         if len(s.url) > 0:
@@ -222,9 +307,10 @@ def select(zone, max_count, is_found=True, show=False):
             else:
                 body += "<div id='"+s.tid+"' class='row'"
                 tagged = "0"
-                if (len(s.tag) > 0 and s.tag in tag_list) or s.status > 0:
+                if (len(s.tag) > 0 and s.tag in tag_list) or s.status > 0 or s.price > 0:
                     body += " style=\"display:none\""
                     tagged = "1"
+                body += " price='"+str(s.price)+"'"
                 body += "><div class='col'><button onclick=\"delByTid('"+s.tid+"');\">刪除</button>"
                 body += "<button onclick=\"keepByTid('"+s.tid+"');\">保留</button>"
                 body += "<button id='"+s.tid+"' status='"+str(s.status)+"' class='show_tag' hidden>"+s.tag+"</button>"

@@ -13,8 +13,9 @@ import jkforum as jkf
 def jkforum(request):
     zone = int(request.GET.get('zone', 0))
     max_count = int(request.GET.get('count', 10))
+    times = int(request.GET.get('times', 1))
     show = bool(request.GET.get('show', False))
-    title, body = jkf.request(zone, max_count)
+    title, body = jkf.request(zone, max_count, times)
     return render(request, 'jkf.html', {
             'title': title,
             'body': mark_safe(body),
@@ -22,7 +23,7 @@ def jkforum(request):
 
 def jkforum_select(request):
     zone = int(request.GET.get('zone', 0))
-    max_count = int(request.GET.get('count', 10))
+    max_count = int(request.GET.get('count', 500))
     is_found = bool(request.GET.get('is_found', True))
     show = bool(request.GET.get('show', False))
     title, body = jkf.select(zone, max_count, is_found, show)

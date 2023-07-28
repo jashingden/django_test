@@ -16,6 +16,7 @@ class JKFPost(models.Model):
     name = models.CharField(max_length=50)
     url = models.URLField(blank=True, max_length=50)
     tag = models.CharField(max_length=50)
+    price = models.IntegerField(default=0)
     is_found = models.BooleanField(default=False)
     status = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
