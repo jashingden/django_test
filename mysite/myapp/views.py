@@ -51,7 +51,8 @@ def jkforum_deleteAll(request):
 def jkforum_tag(request):
     zone = int(request.GET.get('zone', 0))
     tag = request.GET.get('tag', '')
-    msg = jkf.tag(zone, tag)
+    act = request.GET.get('act', 'a')
+    msg = jkf.tag(zone, tag, act)
     return render(request, 'test.html', {
             'current_time': str(datetime.now(timezone(timedelta(hours=+8)))) + ' MSG=' + msg,
             })

@@ -16,7 +16,7 @@ url_list = ["type-1128-1476.html","type-1128-1950.html","type-1128-1949.html","t
 
 home = "https://www.jkforum.net/"
 mydir = os.getcwd()+'/staticfiles/jkforum/'
-mylocal = False
+mylocal = True
 
 def parse_url(zone, url, max_count=10, show=False):
     body = ""
@@ -29,6 +29,7 @@ def parse_url(zone, url, max_count=10, show=False):
     count = 0
     match = 0
     find = 0
+    update = 0
     for a in a_list:
         link = a["href"]
         if "forum.php?mod=viewthread" in link:
@@ -44,6 +45,9 @@ def parse_url(zone, url, max_count=10, show=False):
                     if len(plist) > 0:
                         p = plist[0]
                         if p.is_found == True:
+                            if (p.name != name):
+                                update += 1
+                                p.save()
                             if (show):
                                 body, og_url, tag = parse_content(zone, tid, content_url, body, name, show)
                                 find += 1
@@ -70,7 +74,7 @@ def parse_url(zone, url, max_count=10, show=False):
                         #print("-----------------")
         if count >= max_count:
             break
-    return body, find, match
+    return body, find, match, update
 
 def get_tid(link):
     idx = link.index("tid=")
@@ -267,9 +271,9 @@ def request(zone, max_count, times, show=False):
         body = ''
         
         for i in range(0, times):
-            p_body, find_count, match_count = parse_url(zone, url, max_count, show)
+            p_body, find_count, match_count, update_count = parse_url(zone, url, max_count, show)
             dt = datetime.now(timezone(timedelta(hours=+8)))
-            title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
+            title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,更新"+str(update_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
             if show == False:
                 p_body = title
                 title = 'jkforum'
@@ -337,23 +341,33 @@ def deleteAll():
     JKFPost.objects.all().delete()
     deleteFiles(mydir)
 
-def tag(zone, tag, is_found=True):
-    slist = JKFPost.objects.filter(zone=zone, is_found=is_found).order_by('-created_at')
-    count = 0
-    print("tag, len="+str(len(slist)))
-    for s in slist:
-        if len(s.tag) > 0:
-            if (s.tag == tag):
-                count += 1
+def tag(zone, tag, act, is_found=True):
+    if act == 'd':
+        tlist = JKFTag.objects.filter(zone=zone, tag=tag)
+        if len(tlist) > 0:
+            t = tlist[0]
+            t.delete()
+            title = "已刪除" + tag
         else:
-            if find_content(s.tid, s.url, tag) == True:
-                s.tag = tag
-                s.save()
-                count += 1
-    if count > 0:
-        t = JKFTag(zone=zone, tag=tag)
-        t.save()
-    return "找到"+str(count)+"筆,總共"+str(len(slist))+"筆"
+            title = "找不到" + tag
+    else:
+        slist = JKFPost.objects.filter(zone=zone, is_found=is_found).order_by('-created_at')
+        count = 0
+        print("tag, len="+str(len(slist)))
+        for s in slist:
+            if len(s.tag) > 0:
+                if (s.tag == tag):
+                    count += 1
+            else:
+                if find_content(s.tid, s.url, tag) == True:
+                    s.tag = tag
+                    s.save()
+                    count += 1
+        if count > 0:
+            t = JKFTag(zone=zone, tag=tag)
+            t.save()
+        title = "找到"+str(count)+"筆,總共"+str(len(slist))+"筆"
+    return title
 
 def keep(tid, status):
     plist = JKFPost.objects.filter(tid=tid)
