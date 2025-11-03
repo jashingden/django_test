@@ -294,11 +294,11 @@ def select(zone, max_count, is_found=True, show=False):
     title = name+" 找到"+str(len(slist))+"筆,總共"+str(JKFPost.objects.count())+"筆 "+dt.strftime("%c")
     body = "標籤：<button onclick=\"showByStatus(1);\">保留</button> "
     body = body + "<button onclick=\"showByStatus(2);\">90幫</button> "
-    tlist = JKFTag.objects.filter(zone=zone).order_by('-created_at')
+    tlist = JKFTag.objects.filter(zone=zone).order_by('tag')
     tag_list = []
     for t in tlist:
         tag_list.append(t.tag)
-        body += "<button onclick=\"showByTag('"+t.tag+"');\">"+t.tag+"</button> "
+        body += "<button onclick=\"showByTag('"+t.tag+"','"+t.name+"');\">"+t.tag+"</button> "
     
     body = body + "<br><label id='show_list'>未分類/未定價</label>：<br>\r\n"
     count = 0
@@ -341,13 +341,22 @@ def deleteAll():
     JKFPost.objects.all().delete()
     deleteFiles(mydir)
 
-def tag(zone, tag, act, is_found=True):
+def tag(zone, tag, name, act, is_found=True):
     if act == 'd':
         tlist = JKFTag.objects.filter(zone=zone, tag=tag)
         if len(tlist) > 0:
             t = tlist[0]
             t.delete()
             title = "已刪除" + tag
+        else:
+            title = "找不到" + tag
+    elif act == 'e':
+        tlist = JKFTag.objects.filter(zone=zone, tag=tag)
+        if len(tlist) > 0:
+            t = tlist[0]
+            t.name = name
+            t.save()
+            title = "已編輯" + tag
         else:
             title = "找不到" + tag
     else:

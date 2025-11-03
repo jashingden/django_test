@@ -34,8 +34,8 @@ function keepByTid(tid) {
     });
   }
 }
-function showByTag(tag) {
-  $("#show_list").html(tag);
+function showByTag(tag, name) {
+  $("#show_list").html(tag+' '+name);
   $("button.show_tag").filter(function(){
     var tid = $(this).attr("id");
     $("div#"+tid).toggle($(this).text().indexOf(tag) > -1);

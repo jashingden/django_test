@@ -27,6 +27,7 @@ class JKFPost(models.Model):
 class JKFTag(models.Model):
     zone = models.IntegerField()
     tag = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
