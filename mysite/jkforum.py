@@ -6,150 +6,209 @@ Created on Tue Nov 10 17:48:11 2020
 """
 from myapp.models import JKFPost
 from myapp.models import JKFTag
-import mechanicalsoup
 from datetime import datetime, timezone, timedelta
+from playwright.sync_api import Playwright, sync_playwright, expect
+import time
 import os
 import traceback
 
 name_list = ["中山區.林森北路","板橋.中永和","大台北","萬華.西門町","三重.新莊"]
-url_list = ["type-1128-1476.html","type-1128-1950.html","type-1128-1949.html","type-1128-1948.html","type-1128-1951.html"]
+url_list = ["/p/type-1128-1476.html","/p/type-1128-1950.html","/p/type-1128-1949.html","/p/type-1128-1948.html","/p/type-1128-1951.html"]
 
-home = "https://www.jkforum.net/"
+home = "https://jkforum.net"
 mydir = os.getcwd()+'/staticfiles/jkforum/'
 mylocal = True
 
-def parse_url(zone, url, max_count=10, show=False):
+def parse_url(zone, url, max_count=10, times: int = 1):
     body = ""
     start_url = home + url
+
+    # 先取得文章列表
+    with sync_playwright() as playwright:
+        scroll = int(max_count / 80) if max_count > 80 else 1
+        post_links = parse_page(playwright, start_url, scroll)
     
-    browser = mechanicalsoup.StatefulBrowser()
-    page = browser.get(start_url)
-    
-    a_list = [a for a in page.soup.find_all("a") if a.get("href") is not None]
-    count = 0
-    match = 0
-    find = 0
-    update = 0
-    for a in a_list:
-        link = a["href"]
-        if "forum.php?mod=viewthread" in link:
-            if a.get("onclick") is not None:
-                click = a["onclick"]
-                if "atarget(this)" in click:
-                    count += 1
-                    tid = get_tid(link)
-                    name = a.text if len(a.text) <= 50 else a.text[0:50]
-                    content_url = home + link
-                    plist = JKFPost.objects.filter(tid=tid)
-                    og_url = ""
-                    if len(plist) > 0:
-                        p = plist[0]
-                        if p.is_found == True:
-                            if (p.name != name):
-                                update += 1
-                                p.save()
-                            if (show):
-                                body, og_url, tag = parse_content(zone, tid, content_url, body, name, show)
-                                find += 1
-                            else:
-                                og_url = p.url
-                    else:
-                        p = JKFPost(tid=tid, zone=zone, name=name)
-                        body, og_url, tag, price, status = parse_content(zone, tid, content_url, body, name, show)
-                        find += 1
-                        if len(og_url) > 0:
-                            p.is_found = True
-                            p.url = og_url
-                            p.tag = tag
-                            p.price = price
-                        p.status = status
-                        p.save()
-                        
-                    if len(og_url) > 0:
-                        match += 1
-                        body = body + "<br><h1><a href='"+og_url+"' target='_blank'>"+name+"</a></h1><br>\r\n"
-                        body = body + "<hr>"
-                        #print(a.text)
-                        #print(content_url)
-                        #print("-----------------")
+    count = 0  # 搜尋文章總筆數
+    match = 0  # 符合文章筆數
+    find = 0   # 找到新文章筆數
+    update = 0 # 更新文章內文筆數
+
+    # 檢查是否已存在於DB
+    post_list = []
+    for _, link in enumerate(post_links):
+        count += 1
+        name = link['name']
+        tid = link['tid']
+        plist = JKFPost.objects.filter(tid=tid)
+        if len(plist) > 0:
+            p = plist[0]
+            if p.is_found == True and p.name != name:
+                update += 1
+                p.save()
+        else:
+            find += 1
+            post_list.append(link)
+        
+        # 最大處理筆數
         if count >= max_count:
             break
-    return body, find, match, update
+
+    # 各別取得文章內文
+    with sync_playwright() as playwright:
+        post_content = parse_content(playwright, post_list)
+
+    # 處理新文章列表
+    for _, link in enumerate(post_content):
+        name = link['name']
+        content_url = link['url']
+        tid = link['tid']
+        content = link['content']
+        og_url, tag, price, status = handle_content(content, zone, tid, content_url, name)
+        
+        # 寫入DB
+        p = JKFPost(tid=tid, zone=zone, name=name)
+        if len(og_url) > 0:
+            p.is_found = True
+            p.url = og_url
+            p.tag = tag
+            p.price = price
+        p.status = status
+        p.save()
+        match = match + 1 if len(og_url) > 0 else match
+    return find, match, update
 
 def get_tid(link):
-    idx = link.index("tid=")
-    start = idx+4
-    end = link.index("&", idx)
+    idx = link.index("thread-")
+    start = idx+7
+    end = link.index("-", start)
     tid = link[start:end]
     return tid
 
-def parse_content(zone, tid, url, body, name="", show=False):
+def get_title(title):
+    idx = title.find(']')
+    if idx > 0:
+        title = title[idx+1:]
+        title = title if title.find('\n') == -1 else title[0:title.find('\n')]
+    return title if len(title) <= 50 else title[0:50]
+
+def get_title2(title):
+    idx = title.find('<span class="">')
+    if idx > 0:
+        title = title[idx+15:title.find('</span>', idx+15)]
+        title = title if title.find('\n') == -1 else title[0:title.find('\n')]
+    return title if len(title) <= 50 else title[0:50]
+
+def over18(page):
+    # 處理 "我已滿18歲" 的確認彈窗
+    try:
+        # 等待 "不再提醒" 的 checkbox 出現，最多等5秒
+        page.get_by_role("checkbox", name="不再提醒").wait_for(timeout=5000)
+        page.get_by_role("checkbox", name="不再提醒").check()
+        page.get_by_test_id("pass-button").click()
+    except Exception:
+        pass
+
+def parse_page(playwright: Playwright, start_url: str, scroll: int = 1) -> list:
+    # 啟動瀏覽器，headless=False 會顯示瀏覽器畫面，方便除錯
+    browser = playwright.chromium.launch(headless=True)
+    context = browser.new_context(viewport={"width": 1920, "height": 1080})
+    page = context.new_page()
+
+    # 前往目標網頁
+    page.goto(start_url)
+    over18(page)
+
+    # 模擬向下捲動頁面以載入更多文章
+    for _ in range(7, scroll*7):
+        page.mouse.wheel(0, 1000) # 捲動距離可以依據網頁調整
+        time.sleep(3) # 等待新內容載入
+
+    # 找到所有文章的連結元素
+    post_links = page.locator('a[href*="thread-"]').all()
+
+    # 遍歷每一篇文章連結
+    post_list = []
+    for _, link_locator in enumerate(post_links):
+        name = get_title(link_locator.inner_text().strip())
+        if len(name) == 0:
+            name = get_title2(link_locator.inner_html())
+        href = link_locator.get_attribute("href")
+        content_url = home + href
+        tid = get_tid(href)
+        post_list.append({'name': name, 'url': content_url, 'tid': tid})
+        
+    # ---------------------
+    page.close()
+    context.close()
+    browser.close()
+    return post_list
+
+def parse_content(playwright: Playwright, post_links: list) -> list:
+    # 啟動瀏覽器，headless=False 會顯示瀏覽器畫面，方便除錯
+    browser = playwright.chromium.launch(headless=True)
+    context = browser.new_context(viewport={"width": 1920, "height": 1080})
+
+    post_content = []
+    for _, link in enumerate(post_links):
+        name = link['name']
+        content_url = link['url']
+        tid = link['tid']
+
+        # 前往目標網頁
+        page = context.new_page()
+        page.goto(content_url)
+        over18(page)
+
+        try:
+            # 取得第一個帖子的內文
+            # 使用 first 來確保只抓取到第一個符合條件的元素
+            content_element = page.locator(".mb-7-5").first
+            content = content_element.inner_text()
+            #html = content_element.inner_html()
+            ll = content_element.get_by_role("link").all()
+            content = content + f"\n\n\n連結數量: {len(ll)}\n"
+            for _, l in enumerate(ll):
+                content = content + f"連結: {l.get_attribute('href')}\n"
+
+            post_content.append({'name': name, 'url': content_url, 'tid': tid, 'content': content})
+        except Exception:
+            pass
+        finally:
+            page.close()
+        
+    # ---------------------
+    context.close()
+    browser.close()
+    return post_content
+
+def handle_content(content, zone, tid, content_url, name):
     txt_path = mydir+tid+'.txt'
     text = ''
-    if show == False and os.path.exists(txt_path):
+    if os.path.exists(txt_path):
         text = loadHTML(txt_path)
     else:
-        browser = mechanicalsoup.StatefulBrowser()
-        page = browser.get(url)
-        table_list = page.soup.find_all("table", class_="view-data")
-        if len(table_list) > 0:
-            table = table_list[0]
-            text = table.text
-            if (mylocal):
-                a_list = table.find_all("a")
-                for a in a_list:
-                    link = a["href"]
-                    if link.startswith("http"):
-                        text += '\n' + link
-                saveHTML(txt_path, text)
+        text = content
+        saveHTML(txt_path, text)
         
     og_url = ""
     tag = ""
     price = 0
     status = 0
     if find_spa(text, name) == False:
-        meta = page.soup.find("meta", property='og:url')
-        if meta is not None:
-            og_url = meta["content"]
-            tag = get_tag(text, zone)
-            price = get_price(text, name)
-            status = get_status(text, name)
-            if (show):
-                img_list = [img for img in table.find_all("img") if img.get("file") is not None]
-                if len(img_list) < 10:
-                    for img in img_list:
-                        img_file = img["file"]
-                        if img_file.startswith('/'):
-                            img_file = home + img_file[1:]
-                            #img_width = img["width"]
-                            body = body + "<img src='"+img_file+"'>\r\n"
-                            #print(img_file, img_width)
-    return body, og_url, tag, price, status
+        og_url = content_url
+        tag = get_tag(text, zone)
+        price = get_price(text, name)
+        status = get_status(text, name)
+    return og_url, tag, price, status
 
 def find_content(tid, url, tag):
     txt_path = mydir+tid+'.txt'
     text = ''
     if os.path.exists(txt_path):
         text = loadHTML(txt_path)
-    else:
-        browser = mechanicalsoup.StatefulBrowser()
-        page = browser.get(url)
-        table_list = page.soup.find_all("table", class_="view-data")
-        if len(table_list) > 0:
-            table = table_list[0]
-            text = table.text
-            if (mylocal):
-                a_list = table.find_all("a")
-                for a in a_list:
-                    text += '\n' + a["href"]
-                saveHTML(txt_path, text)
-    
-    print(txt_path)
-    print(text)
     return tag in text
 
 def find_spa(table_text, name=""):
-    #font_list = table.find_all("font")
     spa_text = ("定點","幹部","紅牌","24H")
     for t in spa_text:
         if len(name) > 0 and t in name:
@@ -260,7 +319,7 @@ def deleteFiles(path):
             #print('deleting file: '+file)
             os.remove(file)
 
-def request(zone, max_count, times, show=False):
+def request(zone, max_count, times):
     try:
         if zone < 0 or zone >= len(name_list):
             return "", ""
@@ -269,15 +328,12 @@ def request(zone, max_count, times, show=False):
         url = url_list[zone]
         title = ''
         body = ''
-        
-        for i in range(0, times):
-            p_body, find_count, match_count, update_count = parse_url(zone, url, max_count, show)
+        for _ in range(0, times):
+            find_count, match_count, update_count = parse_url(zone, url, max_count)
             dt = datetime.now(timezone(timedelta(hours=+8)))
-            title = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,更新"+str(update_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
-            if show == False:
-                p_body = title
-                title = 'jkforum'
+            p_body = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,更新"+str(update_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
             body += p_body+"<br>"
+        title = 'jkforum'
     except:
         title = "Server Error"
         exc = traceback.format_exc().splitlines()
@@ -286,8 +342,8 @@ def request(zone, max_count, times, show=False):
             body += e + "<br>"
     return title, body
 
-def select(zone, max_count, is_found=True, show=False):
-    slist = JKFPost.objects.filter(zone=zone, is_found=is_found).order_by('-created_at')
+def select(zone, max_count):
+    slist = JKFPost.objects.filter(zone=zone, is_found=True).order_by('-created_at')
     
     name = name_list[zone]
     dt = datetime.now(timezone(timedelta(hours=+8)))
@@ -304,21 +360,16 @@ def select(zone, max_count, is_found=True, show=False):
     count = 0
     for s in slist:
         if len(s.url) > 0:
-            if (show):
-                body, og_url, tag = parse_content(zone, s.tid, s.url, body, s.name, show)
-                body = body + "<br><h1><button onclick=\"delByTid('"+s.tid+"', '"+s.name+"');\">刪除</button> <a href='"+s.url+"' target='_blank'>"+s.name+"</a></h1><br>\r\n"
-                body = body + "<hr>"
-            else:
-                body += "<div id='"+s.tid+"' class='row'"
-                tagged = "0"
-                if (len(s.tag) > 0 and s.tag in tag_list) or s.status > 0 or s.price > 0:
-                    body += " style=\"display:none\""
-                    tagged = "1"
-                body += " price='"+str(s.price)+"'"
-                body += "><div class='col'><button onclick=\"delByTid('"+s.tid+"');\">刪除</button>"
-                body += "<button onclick=\"keepByTid('"+s.tid+"');\">保留</button>"
-                body += "<button id='"+s.tid+"' status='"+str(s.status)+"' class='show_tag' hidden>"+s.tag+"</button>"
-                body += " <a id='"+s.tid+"' href='"+s.url+"' tagged='"+tagged+"' target='_blank'>"+s.name+"</a></div></div>\r\n"
+            body += "<div id='"+s.tid+"' class='row'"
+            tagged = "0"
+            if (len(s.tag) > 0 and s.tag in tag_list) or s.status > 0 or s.price > 0:
+                body += " style=\"display:none\""
+                tagged = "1"
+            body += " price='"+str(s.price)+"'"
+            body += "><div class='col'><button onclick=\"delByTid('"+s.tid+"');\">刪除</button>"
+            body += "<button onclick=\"keepByTid('"+s.tid+"');\">保留</button>"
+            body += "<button id='"+s.tid+"' status='"+str(s.status)+"' class='show_tag' hidden>"+s.tag+"</button>"
+            body += " <a id='"+s.tid+"' href='"+s.url+"' tagged='"+tagged+"' target='_blank'>"+s.name+"</a></div></div>\r\n"
         else:
             s.delete()
         count += 1
@@ -389,11 +440,3 @@ def keep(tid, status):
         title = "找不到" + tid
     return title
 
-def run():
-    zone = 0
-    max_count = 10
-    title, output = request(zone, max_count)
-    print(output)
-    return title
-
-#print( run() )
