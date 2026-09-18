@@ -19,15 +19,17 @@ home = "https://jkforum.net"
 mydir = os.getcwd()+'/staticfiles/jkforum/'
 mylocal = True
 
-def parse_url(zone, url, max_count=10, times: int = 1):
+def parse_url(zone, url, max_count=10):
     body = ""
     start_url = home + url
 
     # 先取得文章列表
     with sync_playwright() as playwright:
-        scroll = int(max_count / 80) if max_count > 80 else 1
+        scroll = int(max_count / 20) if max_count > 20 else 1
         post_links = parse_page(playwright, start_url, scroll)
     
+    print(f"parse_url zone={zone} max_count={max_count} scroll={scroll} links={len(post_links)}")
+
     count = 0  # 搜尋文章總筆數
     match = 0  # 符合文章筆數
     find = 0   # 找到新文章筆數
@@ -75,7 +77,7 @@ def parse_url(zone, url, max_count=10, times: int = 1):
         p.status = status
         p.save()
         match = match + 1 if len(og_url) > 0 else match
-    return find, match, update
+    return count, find, match, update
 
 def get_tid(link):
     idx = link.index("thread-")
@@ -118,25 +120,30 @@ def parse_page(playwright: Playwright, start_url: str, scroll: int = 1) -> list:
     page.goto(start_url)
     over18(page)
 
-    # 模擬向下捲動頁面以載入更多文章
-    for _ in range(7, scroll*7):
-        page.mouse.wheel(0, 1000) # 捲動距離可以依據網頁調整
-        time.sleep(3) # 等待新內容載入
-
-    # 找到所有文章的連結元素
-    post_links = page.locator('a[href*="thread-"]').all()
-
-    # 遍歷每一篇文章連結
     post_list = []
-    for _, link_locator in enumerate(post_links):
-        name = get_title(link_locator.inner_text().strip())
-        if len(name) == 0:
-            name = get_title2(link_locator.inner_html())
-        href = link_locator.get_attribute("href")
-        content_url = home + href
-        tid = get_tid(href)
-        post_list.append({'name': name, 'url': content_url, 'tid': tid})
+    links = {}
+    for i in range(scroll):
+        # 找到所有文章的連結元素
+        post_links = page.locator('a[href*="thread-"]').all()
+
+        # 遍歷每一篇文章連結
+        for _, link_locator in enumerate(post_links):
+            href = link_locator.get_attribute("href")
+            if href in links:
+                continue
+            links[href] = True
+            name = get_title(link_locator.inner_text().strip())
+            if len(name) == 0:
+                name = get_title2(link_locator.inner_html())
+            content_url = home + href
+            tid = get_tid(href)
+            post_list.append({'name': name, 'url': content_url, 'tid': tid})
         
+        # 模擬向下捲動頁面以載入更多文章
+        for _ in range(7):
+            page.mouse.wheel(0, 1000) # 捲動距離可以依據網頁調整
+            time.sleep(3) # 等待新內容載入
+
     # ---------------------
     page.close()
     context.close()
@@ -153,6 +160,8 @@ def parse_content(playwright: Playwright, post_links: list) -> list:
         name = link['name']
         content_url = link['url']
         tid = link['tid']
+
+        print(f"--- 正在處理第 {_+1} 篇文章 ---")
 
         # 前往目標網頁
         page = context.new_page()
@@ -329,9 +338,9 @@ def request(zone, max_count, times):
         title = ''
         body = ''
         for _ in range(0, times):
-            find_count, match_count, update_count = parse_url(zone, url, max_count)
+            total_count, find_count, match_count, update_count = parse_url(zone, url, max_count)
             dt = datetime.now(timezone(timedelta(hours=+8)))
-            p_body = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,更新"+str(update_count)+"筆,總共"+str(max_count)+"筆 "+dt.strftime("%c")
+            p_body = name+" 找到"+str(match_count)+"筆,搜尋"+str(find_count)+"筆,更新"+str(update_count)+"筆,總共"+str(total_count)+"筆 "+dt.strftime("%c")
             body += p_body+"<br>"
         title = 'jkforum'
     except:
